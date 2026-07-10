@@ -1,29 +1,138 @@
-import { PrismaClient, User, Post, Comment } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
+// Mock database - in-memory storage for deployment without a real database
+import { v4 as uuidv4 } from 'uuid';
 
-// Prevent multiple instances of Prisma Client in development
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
-}
+// Types
+export type User = {
+  id: string;
+  name: string;
+  username: string;
+  email: string;
+  password_hash: string;
+  avatar: string;
+  bio: string;
+  location: string;
+  website: string;
+  cover_image: string;
+  is_verified: boolean;
+  followers: number;
+  following: number;
+  posts: number;
+  created_at: Date;
+};
 
-const connectionString = process.env.DATABASE_URL!;
-const adapter = new PrismaPg({ connectionString });
+export type Post = {
+  id: string;
+  author_id: string;
+  content: string;
+  image: string | null;
+  location: string | null;
+  likesCount: number;
+  commentsCount: number;
+  shares: number;
+  created_at: Date;
+};
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter })
+export type Comment = {
+  id: string;
+  post_id: string;
+  author_id: string;
+  content: string;
+  likes: number;
+  created_at: Date;
+};
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma
-
-// ---------- User Types ----------
-
-// Safe user object (without password hash) to return to the client
 export type SafeUser = Omit<User, 'password_hash'>;
+
+// Mock data storage
+const users: Map<string, User> = new Map();
+const posts: Map<string, Post> = new Map();
+const comments: Map<string, Comment> = new Map();
+const likes: Map<string, { post_id: string; user_id: string }> = new Map();
+const savedPosts: Map<string, { post_id: string; user_id: string }> = new Map();
+const follows: Map<string, { follower_id: string; following_id: string }> = new Map();
+
+// Initialize with mock data
+const initializeMockData = () => {
+  if (users.size > 0) return; // Already initialized
+
+  // Create default users
+  const user1: User = {
+    id: 'user1',
+    name: 'Alex Chen',
+    username: 'alexchen',
+    email: 'alex@example.com',
+    password_hash: '$2a$10$mock_hash_1',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop',
+    bio: 'Creative Developer 🚀',
+    location: 'San Francisco',
+    website: 'alexchen.dev',
+    cover_image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&h=400&fit=crop',
+    is_verified: true,
+    followers: 512,
+    following: 234,
+    posts: 89,
+    created_at: new Date('2023-01-15'),
+  };
+
+  const user2: User = {
+    id: 'user2',
+    name: 'Sarah Williams',
+    username: 'sarahwill',
+    email: 'sarah@example.com',
+    password_hash: '$2a$10$mock_hash_2',
+    avatar: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=400&h=400&fit=crop',
+    bio: 'Designer & Creative 🎨',
+    location: 'New York',
+    website: 'sarahdesigns.com',
+    cover_image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&h=400&fit=crop',
+    is_verified: false,
+    followers: 234,
+    following: 156,
+    posts: 45,
+    created_at: new Date('2023-03-22'),
+  };
+
+  users.set(user1.id, user1);
+  users.set(user2.id, user2);
+
+  // Create mock posts
+  const post1: Post = {
+    id: 'post1',
+    author_id: 'user1',
+    content: 'Just launched my new portfolio website! Check it out and let me know what you think. The journey continues! 🚀',
+    image: null,
+    location: 'San Francisco, CA',
+    likesCount: 234,
+    commentsCount: 18,
+    shares: 42,
+    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000),
+  };
+
+  const post2: Post = {
+    id: 'post2',
+    author_id: 'user2',
+    content: 'Excited to announce that I\'m starting a new role as Lead Designer at an amazing startup! 🎉',
+    image: null,
+    location: 'New York, NY',
+    likesCount: 567,
+    commentsCount: 45,
+    shares: 89,
+    created_at: new Date(Date.now() - 5 * 60 * 60 * 1000),
+  };
+
+  posts.set(post1.id, post1);
+  posts.set(post2.id, post2);
+};
+
+// Initialize on load
+initializeMockData();
 
 export function toSafeUser(user: User): SafeUser {
   const { password_hash, ...safeUser } = user;
   return safeUser;
 }
 
-// ---------- CRUD Operations - Users ----------
+// ========== User Operations ==========
 
 export async function createUser(
   id: string,
@@ -34,43 +143,57 @@ export async function createUser(
   avatar?: string,
   coverImage?: string
 ): Promise<User> {
-  return prisma.user.create({
-    data: {
-      id,
-      name,
-      username,
-      email,
-      password_hash: passwordHash,
-      avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop',
-      bio: 'New Quantum Creator ✨',
-      cover_image: coverImage || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&h=400&fit=crop',
-    }
-  });
+  const user: User = {
+    id,
+    name,
+    username,
+    email,
+    password_hash: passwordHash,
+    avatar: avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop',
+    bio: 'New Quantum Creator ✨',
+    location: '',
+    website: '',
+    cover_image: coverImage || 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1200&h=400&fit=crop',
+    is_verified: false,
+    followers: 0,
+    following: 0,
+    posts: 0,
+    created_at: new Date(),
+  };
+  users.set(id, user);
+  return user;
 }
 
 export async function findUserByEmail(email: string): Promise<User | null> {
-  return prisma.user.findUnique({ where: { email } });
+  for (const user of users.values()) {
+    if (user.email === email) return user;
+  }
+  return null;
 }
 
 export async function findUserByUsername(username: string): Promise<User | null> {
-  return prisma.user.findUnique({ where: { username } });
+  for (const user of users.values()) {
+    if (user.username === username) return user;
+  }
+  return null;
 }
 
 export async function findUserById(id: string): Promise<User | null> {
-  return prisma.user.findUnique({ where: { id } });
+  return users.get(id) || null;
 }
 
 export async function updateUser(
   id: string,
   updates: Partial<Pick<User, 'name' | 'username' | 'bio' | 'location' | 'website' | 'avatar' | 'cover_image'>>
 ): Promise<User> {
-  return prisma.user.update({
-    where: { id },
-    data: updates
-  });
+  const user = users.get(id);
+  if (!user) throw new Error('User not found');
+  
+  Object.assign(user, updates);
+  return user;
 }
 
-// ---------- CRUD Operations - Posts ----------
+// ========== Post Operations ==========
 
 export async function createPost(
   id: string,
@@ -79,117 +202,90 @@ export async function createPost(
   image?: string | null,
   location?: string | null
 ): Promise<Post> {
-  // Create post and increment user post count in a transaction
-  const [post] = await prisma.$transaction([
-    prisma.post.create({
-      data: {
-        id,
-        author_id: authorId,
-        content,
-        image,
-        location
-      }
-    }),
-    prisma.user.update({
-      where: { id: authorId },
-      data: { posts: { increment: 1 } }
-    })
-  ]);
-
+  const post: Post = {
+    id,
+    author_id: authorId,
+    content,
+    image: image || null,
+    location: location || null,
+    likesCount: 0,
+    commentsCount: 0,
+    shares: 0,
+    created_at: new Date(),
+  };
+  
+  posts.set(id, post);
+  
+  const author = users.get(authorId);
+  if (author) author.posts++;
+  
   return post;
 }
 
-// Get rich posts with author details and interaction states
 export async function getFeedPosts(currentUserId?: string) {
-  const posts = await prisma.post.findMany({
-    orderBy: { created_at: 'desc' },
-    take: 50,
-    include: {
-      author: true,
-      likes: currentUserId ? {
-        where: { user_id: currentUserId }
-      } : false,
-      savedBy: currentUserId ? {
-        where: { user_id: currentUserId }
-      } : false,
-    }
-  });
+  const postArray = Array.from(posts.values())
+    .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+    .slice(0, 50);
 
-  return posts.map(post => ({
-    id: post.id,
-    author: {
-      id: post.author.id,
-      name: post.author.name,
-      username: post.author.username,
-      avatar: post.author.avatar,
-      isVerified: post.author.is_verified
-    },
-    content: post.content,
-    image: post.image,
-    location: post.location,
-    timestamp: post.created_at.toISOString(),
-    likes: post.likesCount,
-    comments: post.commentsCount,
-    shares: post.shares,
-    isLiked: post.likes?.length > 0,
-    isSaved: post.savedBy?.length > 0
-  }));
+  return postArray.map(post => {
+    const author = users.get(post.author_id);
+    if (!author) return null;
+
+    const isLiked = currentUserId ? 
+      Array.from(likes.values()).some(l => l.post_id === post.id && l.user_id === currentUserId) : 
+      false;
+    const isSaved = currentUserId ? 
+      Array.from(savedPosts.values()).some(s => s.post_id === post.id && s.user_id === currentUserId) : 
+      false;
+
+    return {
+      id: post.id,
+      author: {
+        id: author.id,
+        name: author.name,
+        username: author.username,
+        avatar: author.avatar,
+        isVerified: author.is_verified
+      },
+      content: post.content,
+      image: post.image,
+      location: post.location,
+      timestamp: post.created_at.toISOString(),
+      likes: post.likesCount,
+      comments: post.commentsCount,
+      shares: post.shares,
+      isLiked,
+      isSaved,
+    };
+  }).filter(Boolean);
 }
 
-// ---------- CRUD Operations - Interactions ----------
+// ========== Interactions ==========
 
 export async function toggleLike(postId: string, userId: string): Promise<boolean> {
-  const existing = await prisma.like.findUnique({
-    where: {
-      post_id_user_id: { post_id: postId, user_id: userId }
-    }
-  });
-
-  if (existing) {
-    // Unlike
-    await prisma.$transaction([
-      prisma.like.delete({
-        where: { post_id_user_id: { post_id: postId, user_id: userId } }
-      }),
-      prisma.post.update({
-        where: { id: postId },
-        data: { likesCount: { decrement: 1 } }
-      })
-    ]);
+  const key = `${postId}-${userId}`;
+  
+  if (likes.has(key)) {
+    likes.delete(key);
+    const post = posts.get(postId);
+    if (post) post.likesCount = Math.max(0, post.likesCount - 1);
     return false;
   } else {
-    // Like
-    await prisma.$transaction([
-      prisma.like.create({
-        data: { post_id: postId, user_id: userId }
-      }),
-      prisma.post.update({
-        where: { id: postId },
-        data: { likesCount: { increment: 1 } }
-      })
-    ]);
+    likes.set(key, { post_id: postId, user_id: userId });
+    const post = posts.get(postId);
+    if (post) post.likesCount++;
     return true;
   }
 }
 
 export async function toggleSave(postId: string, userId: string): Promise<boolean> {
-  const existing = await prisma.savedPost.findUnique({
-    where: {
-      post_id_user_id: { post_id: postId, user_id: userId }
-    }
-  });
-
-  if (existing) {
-    // Unsave
-    await prisma.savedPost.delete({
-      where: { post_id_user_id: { post_id: postId, user_id: userId } }
-    });
+  const key = `${postId}-${userId}`;
+  
+  if (savedPosts.has(key)) {
+    savedPosts.delete(key);
     return false;
   } else {
-    // Save
-    await prisma.savedPost.create({
-      data: { post_id: postId, user_id: userId }
-    });
+    savedPosts.set(key, { post_id: postId, user_id: userId });
     return true;
   }
 }
@@ -197,74 +293,51 @@ export async function toggleSave(postId: string, userId: string): Promise<boolea
 export async function toggleFollow(followerId: string, followingId: string): Promise<boolean> {
   if (followerId === followingId) return false;
   
-  const existing = await prisma.follow.findUnique({
-    where: {
-      follower_id_following_id: { follower_id: followerId, following_id: followingId }
-    }
-  });
-
-  if (existing) {
-    // Unfollow
-    await prisma.$transaction([
-      prisma.follow.delete({
-        where: { follower_id_following_id: { follower_id: followerId, following_id: followingId } }
-      }),
-      prisma.user.update({
-        where: { id: followerId },
-        data: { following: { decrement: 1 } }
-      }),
-      prisma.user.update({
-        where: { id: followingId },
-        data: { followers: { decrement: 1 } }
-      })
-    ]);
+  const key = `${followerId}-${followingId}`;
+  
+  if (follows.has(key)) {
+    follows.delete(key);
+    const follower = users.get(followerId);
+    const following = users.get(followingId);
+    if (follower) follower.following = Math.max(0, follower.following - 1);
+    if (following) following.followers = Math.max(0, following.followers - 1);
     return false;
   } else {
-    // Follow
-    await prisma.$transaction([
-      prisma.follow.create({
-        data: { follower_id: followerId, following_id: followingId }
-      }),
-      prisma.user.update({
-        where: { id: followerId },
-        data: { following: { increment: 1 } }
-      }),
-      prisma.user.update({
-        where: { id: followingId },
-        data: { followers: { increment: 1 } }
-      })
-    ]);
+    follows.set(key, { follower_id: followerId, following_id: followingId });
+    const follower = users.get(followerId);
+    const following = users.get(followingId);
+    if (follower) follower.following++;
+    if (following) following.followers++;
     return true;
   }
 }
 
-// ---------- CRUD Operations - Comments ----------
+// ========== Comments ==========
 
 export async function addComment(id: string, postId: string, authorId: string, content: string) {
-  const [comment] = await prisma.$transaction([
-    prisma.comment.create({
-      data: {
-        id,
-        post_id: postId,
-        author_id: authorId,
-        content
-      },
-      include: {
-        author: true
-      }
-    }),
-    prisma.post.update({
-      where: { id: postId },
-      data: { commentsCount: { increment: 1 } }
-    })
-  ]);
+  const comment: Comment = {
+    id,
+    post_id: postId,
+    author_id: authorId,
+    content,
+    likes: 0,
+    created_at: new Date(),
+  };
+  
+  comments.set(id, comment);
+  
+  const post = posts.get(postId);
+  if (post) post.commentsCount++;
+
+  const author = users.get(authorId);
+  if (!author) return null;
 
   return {
     id: comment.id,
     author: {
-      name: comment.author.name,
-      username: comment.author.username,
-      avatar: comment.author.avatar
+      name: author.name,
+      username: author.username,
+      avatar: author.avatar
     },
     content: comment.content,
     timestamp: comment.created_at.toISOString(),
@@ -274,41 +347,37 @@ export async function addComment(id: string, postId: string, authorId: string, c
 }
 
 export async function getComments(postId: string) {
-  const comments = await prisma.comment.findMany({
-    where: { post_id: postId },
-    orderBy: { created_at: 'asc' },
-    include: { author: true }
-  });
+  const postComments = Array.from(comments.values())
+    .filter(c => c.post_id === postId)
+    .sort((a, b) => a.created_at.getTime() - b.created_at.getTime());
 
-  return comments.map(comment => ({
-    id: comment.id,
-    author: {
-      name: comment.author.name,
-      username: comment.author.username,
-      avatar: comment.author.avatar
-    },
-    content: comment.content,
-    timestamp: comment.created_at.toISOString(),
-    likes: comment.likes,
-    isLiked: false
-  }));
+  return postComments.map(comment => {
+    const author = users.get(comment.author_id);
+    if (!author) return null;
+
+    return {
+      id: comment.id,
+      author: {
+        name: author.name,
+        username: author.username,
+        avatar: author.avatar
+      },
+      content: comment.content,
+      timestamp: comment.created_at.toISOString(),
+      likes: comment.likes,
+      isLiked: false
+    };
+  }).filter(Boolean);
 }
 
-// ---------- User Profile & Social ----------
+// ========== Profiles ==========
 
 export async function getUserProfile(userId: string, currentUserId?: string) {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const user = users.get(userId);
   if (!user) return null;
 
-  let isFollowing = false;
-  if (currentUserId && currentUserId !== userId) {
-    const follow = await prisma.follow.findUnique({
-      where: {
-        follower_id_following_id: { follower_id: currentUserId, following_id: userId }
-      }
-    });
-    isFollowing = !!follow;
-  }
+  const isFollowing = currentUserId && currentUserId !== userId ?
+    follows.has(`${currentUserId}-${userId}`) : false;
 
   return {
     id: user.id,
@@ -329,151 +398,147 @@ export async function getUserProfile(userId: string, currentUserId?: string) {
 }
 
 export async function getUserPosts(userId: string, currentUserId?: string) {
-  const posts = await prisma.post.findMany({
-    where: { author_id: userId },
-    orderBy: { created_at: 'desc' },
-    take: 50,
-    include: {
-      author: true,
-      likes: currentUserId ? { where: { user_id: currentUserId } } : false,
-      savedBy: currentUserId ? { where: { user_id: currentUserId } } : false,
-    }
-  });
+  const userPosts = Array.from(posts.values())
+    .filter(p => p.author_id === userId)
+    .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+    .slice(0, 50);
 
-  return posts.map(post => ({
-    id: post.id,
-    author: {
-      id: post.author.id,
-      name: post.author.name,
-      username: post.author.username,
-      avatar: post.author.avatar,
-      isVerified: post.author.is_verified
-    },
-    content: post.content,
-    image: post.image,
-    location: post.location,
-    timestamp: post.created_at.toISOString(),
-    likes: post.likesCount,
-    comments: post.commentsCount,
-    shares: post.shares,
-    isLiked: post.likes?.length > 0,
-    isSaved: post.savedBy?.length > 0
-  }));
+  return userPosts.map(post => {
+    const author = users.get(post.author_id);
+    if (!author) return null;
+
+    const isLiked = currentUserId ? 
+      likes.has(`${post.id}-${currentUserId}`) : false;
+    const isSaved = currentUserId ? 
+      savedPosts.has(`${post.id}-${currentUserId}`) : false;
+
+    return {
+      id: post.id,
+      author: {
+        id: author.id,
+        name: author.name,
+        username: author.username,
+        avatar: author.avatar,
+        isVerified: author.is_verified
+      },
+      content: post.content,
+      image: post.image,
+      location: post.location,
+      timestamp: post.created_at.toISOString(),
+      likes: post.likesCount,
+      comments: post.commentsCount,
+      shares: post.shares,
+      isLiked,
+      isSaved,
+    };
+  }).filter(Boolean);
 }
 
 export async function getSavedPosts(userId: string) {
-  const savedEntries = await prisma.savedPost.findMany({
-    where: { user_id: userId },
-    orderBy: { created_at: 'desc' },
-    include: {
-      post: {
-        include: {
-          author: true,
-          likes: { where: { user_id: userId } },
-        }
-      }
-    }
-  });
+  const userSaved = Array.from(savedPosts.values())
+    .filter(s => s.user_id === userId);
 
-  return savedEntries.map(entry => ({
-    id: entry.post.id,
-    author: {
-      id: entry.post.author.id,
-      name: entry.post.author.name,
-      username: entry.post.author.username,
-      avatar: entry.post.author.avatar,
-      isVerified: entry.post.author.is_verified
-    },
-    content: entry.post.content,
-    image: entry.post.image,
-    location: entry.post.location,
-    timestamp: entry.post.created_at.toISOString(),
-    likes: entry.post.likesCount,
-    comments: entry.post.commentsCount,
-    shares: entry.post.shares,
-    isLiked: entry.post.likes?.length > 0,
-    isSaved: true
-  }));
+  return userSaved.map(saved => {
+    const post = posts.get(saved.post_id);
+    const author = post ? users.get(post.author_id) : null;
+    if (!post || !author) return null;
+
+    return {
+      id: post.id,
+      author: {
+        id: author.id,
+        name: author.name,
+        username: author.username,
+        avatar: author.avatar,
+        isVerified: author.is_verified
+      },
+      content: post.content,
+      image: post.image,
+      location: post.location,
+      timestamp: post.created_at.toISOString(),
+      likes: post.likesCount,
+      comments: post.commentsCount,
+      shares: post.shares,
+      isLiked: likes.has(`${post.id}-${userId}`),
+      isSaved: true,
+    };
+  }).filter(Boolean);
 }
 
 export async function getFollowers(userId: string) {
-  const follows = await prisma.follow.findMany({
-    where: { following_id: userId },
-    orderBy: { created_at: 'desc' },
-    include: { follower: true }
-  });
+  const userFollows = Array.from(follows.values())
+    .filter(f => f.following_id === userId)
+    .map(f => {
+      const follower = users.get(f.follower_id);
+      return {
+        id: follower?.id || '',
+        name: follower?.name || '',
+        username: follower?.username || '',
+        avatar: follower?.avatar || '',
+        bio: follower?.bio || '',
+        is_verified: follower?.is_verified || false,
+        followed_at: new Date().toISOString(),
+      };
+    });
 
-  return follows.map(f => ({
-    id: f.follower.id,
-    name: f.follower.name,
-    username: f.follower.username,
-    avatar: f.follower.avatar,
-    bio: f.follower.bio,
-    is_verified: f.follower.is_verified,
-    followed_at: f.created_at.toISOString(),
-  }));
+  return userFollows;
 }
 
 export async function getFollowing(userId: string) {
-  const follows = await prisma.follow.findMany({
-    where: { follower_id: userId },
-    orderBy: { created_at: 'desc' },
-    include: { following: true }
-  });
+  const userFollows = Array.from(follows.values())
+    .filter(f => f.follower_id === userId)
+    .map(f => {
+      const following = users.get(f.following_id);
+      return {
+        id: following?.id || '',
+        name: following?.name || '',
+        username: following?.username || '',
+        avatar: following?.avatar || '',
+        bio: following?.bio || '',
+        is_verified: following?.is_verified || false,
+        followed_at: new Date().toISOString(),
+      };
+    });
 
-  return follows.map(f => ({
-    id: f.following.id,
-    name: f.following.name,
-    username: f.following.username,
-    avatar: f.following.avatar,
-    bio: f.following.bio,
-    is_verified: f.following.is_verified,
-    followed_at: f.created_at.toISOString(),
-  }));
+  return userFollows;
 }
 
 export async function searchUsers(query: string) {
-  const users = await prisma.user.findMany({
-    where: {
-      OR: [
-        { name: { contains: query } },
-        { username: { contains: query } },
-      ]
-    },
-    take: 20,
-  });
-
-  return users.map(u => ({
-    id: u.id,
-    name: u.name,
-    username: u.username,
-    avatar: u.avatar,
-    bio: u.bio,
-    followers: u.followers,
-    is_verified: u.is_verified,
-  }));
+  return Array.from(users.values())
+    .filter(u => 
+      u.name.toLowerCase().includes(query.toLowerCase()) ||
+      u.username.toLowerCase().includes(query.toLowerCase())
+    )
+    .slice(0, 20)
+    .map(u => ({
+      id: u.id,
+      name: u.name,
+      username: u.username,
+      avatar: u.avatar,
+      bio: u.bio,
+      followers: u.followers,
+      is_verified: u.is_verified,
+    }));
 }
 
 export async function getPostById(postId: string, currentUserId?: string) {
-  const post = await prisma.post.findUnique({
-    where: { id: postId },
-    include: {
-      author: true,
-      likes: currentUserId ? { where: { user_id: currentUserId } } : false,
-      savedBy: currentUserId ? { where: { user_id: currentUserId } } : false,
-    }
-  });
-
+  const post = posts.get(postId);
   if (!post) return null;
+
+  const author = users.get(post.author_id);
+  if (!author) return null;
+
+  const isLiked = currentUserId ? likes.has(`${postId}-${currentUserId}`) : false;
+  const isSaved = currentUserId ? savedPosts.has(`${postId}-${currentUserId}`) : false;
 
   return {
     id: post.id,
     author: {
-      id: post.author.id,
-      name: post.author.name,
-      username: post.author.username,
-      avatar: post.author.avatar,
-      isVerified: post.author.is_verified
+      id: author.id,
+      name: author.name,
+      username: author.username,
+      avatar: author.avatar,
+      isVerified: author.is_verified
     },
     content: post.content,
     image: post.image,
@@ -482,8 +547,10 @@ export async function getPostById(postId: string, currentUserId?: string) {
     likes: post.likesCount,
     comments: post.commentsCount,
     shares: post.shares,
-    isLiked: post.likes?.length > 0,
-    isSaved: post.savedBy?.length > 0
+    isLiked,
+    isSaved,
   };
 }
 
+// Export for backwards compatibility
+export const prisma = null;
