@@ -1,0 +1,13 @@
+node_modules/
+.next/
+.env
+.env.db
+.env.local
+.env.production
+*.log
+.DS_Store
+Thumbs.db
+dist/
+out/
+quantum.db
+/lib/generated/prisma

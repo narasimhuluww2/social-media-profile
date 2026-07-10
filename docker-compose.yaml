@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+   postgres:
+      image: postgres:17
+      container_name: quantum-postgres
+      env_file:
+        - .env.db
+      ports:
+        - "5432:5432"
+      volumes:
+        - postgres-data:/var/lib/postgresql/data
+      
+   app:
+      build:
+        context: .
+        dockerfile: Dockerfile
+      container_name: social-media-ui
+      depends_on:
+        - postgres
+      env_file:
+        - .env
+      ports:
+        - "3000:3000"
+
+volumes:
+   postgres-data:

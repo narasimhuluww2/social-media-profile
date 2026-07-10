@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  username      String    @unique
+  email         String    @unique
+  password_hash String
+  avatar        String?   @default("")
+  bio           String?   @default("")
+  followers     Int       @default(0)
+  following     Int       @default(0)
+  posts         Int       @default(0)
+  website       String?   @default("")
+  location      String?   @default("")
+  cover_image   String?   @default("")
+  is_verified   Boolean   @default(false)
+  created_at    DateTime  @default(now())
+
+  // Relations
+  authoredPosts Post[]
+  comments      Comment[]
+  likes         Like[]
+  savedPosts    SavedPost[]
+  followedBy    Follow[]  @relation("following")
+  followingUser Follow[]  @relation("follower")
+
+  @@map("users")
+}
+
+model Post {
+  id         String    @id @default(cuid())
+  author_id  String
+  content    String
+  image      String?
+  location   String?
+  likesCount Int       @default(0) @map("likes")
+  commentsCount Int    @default(0) @map("comments")
+  shares     Int       @default(0)
+  created_at DateTime  @default(now())
+
+  // Relations
+  author     User      @relation(fields: [author_id], references: [id], onDelete: Cascade)
+  comments   Comment[]
+  likes      Like[]
+  savedBy    SavedPost[]
+
+  @@map("posts")
+}
+
+model Comment {
+  id         String    @id @default(cuid())
+  post_id    String
+  author_id  String
+  content    String
+  likes      Int       @default(0)
+  created_at DateTime  @default(now())
+
+  // Relations
+  post       Post      @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  author     User      @relation(fields: [author_id], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model Like {
+  post_id    String
+  user_id    String
+  created_at DateTime  @default(now())
+
+  // Relations
+  post       Post      @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([post_id, user_id])
+  @@map("likes")
+}
+
+model SavedPost {
+  post_id    String
+  user_id    String
+  created_at DateTime  @default(now())
+
+  // Relations
+  post       Post      @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@id([post_id, user_id])
+  @@map("saved_posts")
+}
+
+model Follow {
+  follower_id  String
+  following_id String
+  created_at   DateTime  @default(now())
+
+  // Relations
+  follower     User      @relation("follower", fields: [follower_id], references: [id], onDelete: Cascade)
+  following    User      @relation("following", fields: [following_id], references: [id], onDelete: Cascade)
+
+  @@id([follower_id, following_id])
+  @@map("follows")
+}
